@@ -1,0 +1,61 @@
+export async function sendOtpEmail(toEmail: string, toName: string, otp: string, accessToken: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const makeBody = (to: string, subject: string, message: string) => {
+      const str = [
+        "To: ", to, "\n",
+        "Subject: ", subject, "\n",
+        "Content-Type: text/html; charset=utf-8\n\n",
+        message
+      ].join('');
+
+      return btoa(unescape(encodeURIComponent(str)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    };
+
+    const htmlMessage = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h2 style="color: #2563eb; margin: 0; font-size: 24px; font-weight: 800; tracking-tight: -0.025em;">KNOW YOUR HEALTH</h2>
+          <p style="color: #64748b; font-size: 12px; margin: 4px 0 0 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Explainable AI Clinical Diagnostics Portal</p>
+        </div>
+        <p style="font-size: 14px; color: #334155; line-height: 1.6; margin: 0 0 16px 0;">Hello <strong>${toName}</strong>,</p>
+        <p style="font-size: 14px; color: #475569; line-height: 1.6; margin: 0 0 24px 0;">Welcome to Know Your Health. To complete your clinical registration and verify your email address, please use the secure 6-digit confirmation key below:</p>
+        
+        <div style="background-color: #f8fafc; border: 1px solid #f1f5f9; padding: 20px; border-radius: 12px; margin: 24px 0; text-align: center;">
+          <p style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; margin: 0 0 8px 0; font-weight: 700;">Verification OTP Code</p>
+          <span style="font-family: monospace; font-size: 36px; font-weight: 900; color: #1e3a8a; letter-spacing: 0.15em;">${otp}</span>
+        </div>
+        
+        <p style="font-size: 13px; color: #64748b; line-height: 1.6; margin: 0 0 24px 0;">This code is valid for 10 minutes. If you did not request this registration, you can safely ignore this email.</p>
+        <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+        <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0; line-height: 1.4;">&copy; ${new Date().getFullYear()} Know Your Health. All rights reserved.<br/>Secured with Google Workspace APIs.</p>
+      </div>
+    `;
+
+    const raw = makeBody(toEmail, 'Know Your Health - Registration Verification OTP', htmlMessage);
+
+    const response = await fetch('https://gmail.googleapis.com/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        raw: raw
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      console.error('Gmail API error response:', errData);
+      throw new Error(errData.error?.message || 'Failed to dispatch email via Gmail API.');
+    }
+
+    return { success: true, message: 'Email sent successfully via Google Gmail API!' };
+  } catch (err: any) {
+    console.error('sendOtpEmail error:', err);
+    return { success: false, message: err.message || 'Failed to dispatch email via Gmail API' };
+  }
+}

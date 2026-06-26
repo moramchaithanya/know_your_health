@@ -1,0 +1,154 @@
+export async function triggerGoogleSheetsSync(token: string): Promise<{ success: boolean; message: string; sheetUrl?: string }> {
+  try {
+    // 1. Fetch full sync-ready data from our backend database
+    const dbResponse = await fetch('/api/patients/full-sync-data');
+    if (!dbResponse.ok) {
+      throw new Error("Failed to fetch patient data from the local database.");
+    }
+    const patientsData = await dbResponse.json();
+
+    if (patientsData.length === 0) {
+      throw new Error("No patient registrations found to sync.");
+    }
+
+    // 2. Search for existing sheet named "KnowHealth - Patients Database"
+    const searchUrl = `https://www.googleapis.com/drive/v3/files?q=name='KnowHealth - Patients Database' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+    const searchRes = await fetch(searchUrl, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (!searchRes.ok) {
+      throw new Error("Google Drive API search failed. Ensure you granted permissions.");
+    }
+    
+    const searchData = await searchRes.json();
+    let spreadsheetId = "";
+
+    if (searchData.files && searchData.files.length > 0) {
+      spreadsheetId = searchData.files[0].id;
+    } else {
+      // Create a new spreadsheet
+      const createUrl = "https://sheets.googleapis.com/v4/spreadsheets";
+      const createRes = await fetch(createUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          properties: {
+            title: "KnowHealth - Patients Database"
+          }
+        })
+      });
+
+      if (!createRes.ok) {
+        throw new Error("Failed to create Google Spreadsheet.");
+      }
+
+      const createData = await createRes.json();
+      spreadsheetId = createData.spreadsheetId;
+    }
+
+    // 3. Clear existing values to prevent leftover rows
+    const clearUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sheet1!A1:Z1000:clear`;
+    await fetch(clearUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    });
+
+    // 4. Build sheet rows
+    const headers = [
+      "Patient ID",
+      "Full Name",
+      "Age",
+      "Gender",
+      "Height (cm)",
+      "Weight (kg)",
+      "BMI",
+      "Blood Group",
+      "Blood Pressure (BP)",
+      "Heart Rate (bpm)",
+      "Oxygen Level (%)",
+      "Temperature (°C)",
+      "Lifestyle Habits",
+      "Smoking Status",
+      "Alcohol Usage",
+      "Medical History",
+      "Family History",
+      "Logged Symptoms",
+      "Suspected Disease",
+      "Consensus Probability (%)",
+      "Ensemble Confidence Score (%)",
+      "Overall Risk Level",
+      "Recommended Tests",
+      "Recommended Lifestyle",
+      "Do's",
+      "Don'ts",
+      "Last Sync/Update Date"
+    ];
+
+    const rows = patientsData.map((p: any) => [
+      p.patient_id || "N/A",
+      p.name || "N/A",
+      (p.age ?? "").toString(),
+      p.gender || "N/A",
+      (p.height ?? "").toString(),
+      (p.weight ?? "").toString(),
+      p.bmi || "N/A",
+      p.blood_group || "N/A",
+      p.bp || "N/A",
+      (p.heart_rate ?? "").toString(),
+      (p.oxygen_level ?? "").toString(),
+      (p.temperature ?? "").toString(),
+      p.lifestyle_habits || "N/A",
+      p.smoking_status || "N/A",
+      p.alcohol_usage || "N/A",
+      p.medical_history || "N/A",
+      p.family_history || "N/A",
+      p.logged_symptoms || "N/A",
+      p.disease_name || "N/A",
+      (p.probability ?? "").toString(),
+      (p.confidence_score ?? "").toString(),
+      p.risk_level || "N/A",
+      p.recommended_tests || "N/A",
+      p.recommended_lifestyle || "N/A",
+      p.dos || "N/A",
+      p.donts || "N/A",
+      new Date(p.last_updated || new Date()).toLocaleString()
+    ]);
+
+    const values = [headers, ...rows];
+
+    // 5. Update spreadsheet values
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Sheet1!A1?valueInputOption=USER_ENTERED`;
+    const updateRes = await fetch(updateUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ values })
+    });
+
+    if (!updateRes.ok) {
+      throw new Error("Failed to populate spreadsheet cells.");
+    }
+
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    return {
+      success: true,
+      message: `Successfully synchronized ${patientsData.length} records to your Google Sheet!`,
+      sheetUrl
+    };
+  } catch (err: any) {
+    console.error("Google Sheets Sync failed:", err);
+    return {
+      success: false,
+      message: `Sync failed: ${err.message}`
+    };
+  }
+}

@@ -1,0 +1,354 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Calendar, Clock, User, Check, Heart, Stethoscope, Star, 
+  DollarSign, Building, FileText, X, AlertCircle, HelpCircle
+} from 'lucide-react';
+import { Doctor, Booking } from '../types.js';
+
+interface BookConsultationProps {
+  doctors: Doctor[];
+  bookings: Booking[];
+  doctorsLoading: boolean;
+  bookingsLoading: boolean;
+  onBookConsultation: (bookingData: {
+    doctor_id: string;
+    doctor_name: string;
+    doctor_specialty: string;
+    appointment_date: string;
+    appointment_time: string;
+    reason: string;
+  }) => Promise<boolean>;
+  onCancelBooking: (bookingId: string) => Promise<boolean>;
+}
+
+export default function BookConsultation({
+  doctors,
+  bookings,
+  doctorsLoading,
+  bookingsLoading,
+  onBookConsultation,
+  onCancelBooking
+}: BookConsultationProps) {
+  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingTime, setBookingTime] = useState('09:00 AM');
+  const [bookingReason, setBookingReason] = useState('');
+  const [bookingState, setBookingState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+
+  const timeSlots = [
+    '09:00 AM',
+    '10:00 AM',
+    '11:00 AM',
+    '12:00 PM',
+    '01:30 PM',
+    '02:30 PM',
+    '03:30 PM',
+    '04:30 PM'
+  ];
+
+  const handleBookingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDoctor || !bookingDate || !bookingReason.trim()) return;
+
+    setBookingState('submitting');
+    const success = await onBookConsultation({
+      doctor_id: selectedDoctor.id,
+      doctor_name: selectedDoctor.name,
+      doctor_specialty: selectedDoctor.specialty,
+      appointment_date: bookingDate,
+      appointment_time: bookingTime,
+      reason: bookingReason
+    });
+
+    if (success) {
+      setBookingState('success');
+      setTimeout(() => {
+        setBookingState('idle');
+        setSelectedDoctor(null);
+        setBookingDate('');
+        setBookingReason('');
+      }, 1500);
+    } else {
+      setBookingState('error');
+    }
+  };
+
+  const getStatusBadge = (status: Booking['status']) => {
+    switch (status) {
+      case 'CONFIRMED':
+        return <span className="text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1">● Confirmed</span>;
+      case 'CANCELLED':
+        return <span className="text-[10px] font-extrabold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200 px-2.5 py-1 rounded-full flex items-center gap-1">● Cancelled</span>;
+      case 'COMPLETED':
+        return <span className="text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full flex items-center gap-1">✓ Completed</span>;
+      default:
+        return <span className="text-[10px] font-extrabold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 px-2.5 py-1 rounded-full flex items-center gap-1 animate-pulse">● Pending Confirmation</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-8 font-sans">
+      
+      {/* Intro section */}
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 md:p-8 rounded-3xl shadow-sm space-y-2">
+        <h2 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+          <Stethoscope className="w-5.5 h-5.5" />
+          Clinical Consultation Booking
+        </h2>
+        <p className="text-blue-100 text-xs max-w-2xl leading-relaxed">
+          Book immediate on-premise or telehealth clinical evaluations with specialized board-certified practitioners. Synchronizes seamlessly with your baseline vitals and predictive diagnostic logs.
+        </p>
+      </div>
+
+      {/* Main split-screen grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left 2 Cols: Doctors directory & booking form */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest block">Available Clinical Specialists</h3>
+            <span className="text-[10px] text-gray-500 font-bold">{doctors.length} active practitioners</span>
+          </div>
+
+          {doctorsLoading ? (
+            <div className="bg-white p-12 rounded-2xl border border-gray-100 text-center">
+              <p className="text-xs text-gray-500 font-bold animate-pulse">Synchronizing directory...</p>
+            </div>
+          ) : doctors.length === 0 ? (
+            <div className="bg-white p-8 rounded-2xl border border-gray-150 text-center space-y-3">
+              <AlertCircle className="w-8 h-8 text-slate-400 mx-auto" />
+              <p className="text-xs text-gray-500 font-semibold">No medical specialists are registered in the clinic database. Please contact clinic admin.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {doctors.map(doctor => (
+                <div 
+                  key={doctor.id} 
+                  className={`bg-white border rounded-2xl p-5 shadow-sm transition duration-150 flex flex-col justify-between ${selectedDoctor?.id === doctor.id ? 'border-blue-600 ring-1 ring-blue-500' : 'border-gray-150'}`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-extrabold text-gray-900 text-sm tracking-tight">{doctor.name}</h4>
+                        <span className="inline-block mt-1 text-[9px] font-extrabold uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                          {doctor.specialty}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 text-amber-500">
+                        <Star className="w-3.5 h-3.5 fill-amber-500" />
+                        <span className="text-[10px] font-bold text-gray-800">{doctor.rating?.toFixed(1) || '5.0'}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 text-[11px] text-gray-500 font-semibold">
+                      <div className="flex items-center gap-2">
+                        <Building className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span className="truncate">{doctor.hospital}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span>{doctor.availability}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-emerald-600">
+                        <DollarSign className="w-3.5 h-3.5 shrink-0" />
+                        <span className="font-bold">${doctor.consultation_fee} Fee</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-gray-400 leading-relaxed italic line-clamp-2">
+                      "{doctor.bio}"
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedDoctor(doctor);
+                      // Scroll to form on mobile devices
+                      const formElement = document.getElementById('appointment-booking-form');
+                      if (formElement) formElement.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className={`w-full mt-4 py-2 rounded-xl text-xs font-bold transition duration-150 cursor-pointer ${selectedDoctor?.id === doctor.id ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-50 hover:bg-slate-100 text-slate-700'}`}
+                  >
+                    {selectedDoctor?.id === doctor.id ? 'Selected Practitioner' : 'Select Specialist'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Appointment Booking Interactive Form */}
+          <AnimatePresence>
+            {selectedDoctor && (
+              <motion.div
+                id="appointment-booking-form"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 15 }}
+                className="bg-white border border-blue-100 rounded-3xl p-6 shadow-md"
+              >
+                <div className="flex justify-between items-center border-b border-gray-100 pb-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4.5 h-4.5 text-blue-600" />
+                    <h3 className="font-extrabold text-gray-900 text-xs uppercase tracking-wider">Configure Booking for {selectedDoctor.name}</h3>
+                  </div>
+                  <button 
+                    onClick={() => setSelectedDoctor(null)}
+                    className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 transition cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleBookingSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Date Picker */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Target Date</label>
+                      <input
+                        type="date"
+                        required
+                        min={new Date().toISOString().split('T')[0]}
+                        value={bookingDate}
+                        onChange={(e) => setBookingDate(e.target.value)}
+                        className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Time slots */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Preferred Time Slot</label>
+                      <select
+                        value={bookingTime}
+                        onChange={(e) => setBookingTime(e.target.value)}
+                        className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none bg-white cursor-pointer"
+                      >
+                        {timeSlots.map(slot => (
+                          <option key={slot} value={slot}>{slot}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Reason text */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">Reason for consultation / Clinical symptoms</label>
+                    <textarea
+                      required
+                      rows={3}
+                      placeholder="Please briefly describe your current physical symptoms, duration, history, and goals..."
+                      value={bookingReason}
+                      onChange={(e) => setBookingReason(e.target.value)}
+                      className="w-full text-xs font-semibold px-3 py-2.5 rounded-xl border border-gray-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                    />
+                  </div>
+
+                  <div className="flex justify-between items-center pt-2">
+                    <div className="text-[11px] text-gray-500 flex items-center gap-1.5 font-medium">
+                      <HelpCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>Fee payable on session checkout: <b className="text-gray-950 font-bold">${selectedDoctor.consultation_fee}</b></span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {bookingState === 'submitting' && (
+                        <span className="text-xs text-blue-600 font-semibold animate-pulse">Requesting slot...</span>
+                      )}
+                      {bookingState === 'success' && (
+                        <span className="text-xs text-emerald-600 font-semibold">✓ Appointment requested!</span>
+                      )}
+                      {bookingState === 'error' && (
+                        <span className="text-xs text-red-600 font-semibold">Booking failed. Try again.</span>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={bookingState === 'submitting'}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-extrabold px-6 py-2.5 rounded-xl shadow-md transition cursor-pointer"
+                      >
+                        Book Appointment
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+        </div>
+
+        {/* Right Col: Booking History / Scheduled Consultations */}
+        <div className="space-y-6">
+          <h3 className="text-xs font-extrabold text-gray-400 uppercase tracking-widest block">My Scheduled Consultations</h3>
+
+          {bookingsLoading ? (
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 text-center text-xs text-gray-400 font-medium animate-pulse">
+              Synchronizing consultation history...
+            </div>
+          ) : bookings.length === 0 ? (
+            <div className="bg-white p-6 rounded-2xl border border-gray-150 text-center py-10 space-y-3">
+              <Calendar className="w-8 h-8 text-slate-300 mx-auto" />
+              <div>
+                <h4 className="text-xs font-bold text-gray-700">No appointments booked</h4>
+                <p className="text-gray-400 text-[10px] mt-1">Select a specialist and submit a booking form to request your initial clinical consultation.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {bookings.map(booking => (
+                <div key={booking.booking_id} className="bg-white border border-gray-150 rounded-2xl p-4.5 shadow-sm space-y-3">
+                  
+                  {/* Booking Header */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-extrabold text-gray-900 text-xs tracking-tight">{booking.doctor_name}</h4>
+                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{booking.doctor_specialty}</span>
+                    </div>
+                    {getStatusBadge(booking.status)}
+                  </div>
+
+                  {/* Details */}
+                  <div className="space-y-1.5 text-[11px] text-gray-600 font-semibold border-t border-slate-50 pt-2.5">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{booking.appointment_date}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{booking.appointment_time}</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100 mt-2">
+                      <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                      <p className="text-[10px] leading-relaxed italic">
+                        "{booking.reason}"
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions (Cancel Booking if PENDING) */}
+                  {booking.status === 'PENDING' && (
+                    <div className="flex justify-end pt-1.5 border-t border-slate-50">
+                      <button
+                        onClick={() => {
+                          const confirmCancel = window.confirm("Are you sure you want to retract this consultation booking request?");
+                          if (confirmCancel) {
+                            onCancelBooking(booking.booking_id);
+                          }
+                        }}
+                        className="text-[10px] font-extrabold text-red-500 hover:text-red-700 uppercase tracking-wider transition cursor-pointer"
+                      >
+                        Cancel Appointment
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
